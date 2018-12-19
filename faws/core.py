@@ -4,13 +4,14 @@ import time
 
 import boto3
 
-RESOURCES = ('ec2', 'elb', 'sg', 'roles', 'elasticache', 'asg')
+RESOURCES = ('ec2', 'elb', 'sg', 'roles', 'elasticache', 'asg', 'rds')
 
 ec2 = boto3.client('ec2')
 elbc = boto3.client('elb')
 iam = boto3.client('iam')
 ec = boto3.client('elasticache')
 asg = boto3.client('autoscaling')
+rds = boto3.client('rds')
 
 all_auto_scaling_groups = []
 all_ec_clusters = []
@@ -18,6 +19,7 @@ all_load_balancers = []
 all_security_groups = []
 all_ec2_instances = []
 all_roles = []
+all_rds_instances = []
 
 
 def request_all(client, funcname, topkey, wait_for=0, **kwargs):
@@ -67,6 +69,10 @@ def get_all_auto_scaling_groups():
 
 def get_all_cache_clusters():
     return request_all(ec, 'describe_cache_clusters', 'CacheClusters')
+
+
+def get_all_rds_instances():
+    return request_all(rds, 'describe_db_instances', 'DBInstances')
 
 
 def get_all_roles():
@@ -285,9 +291,9 @@ def names(list_objs):
     raise Exception('Cannot get name of {}'.format(list_objs[0]))
 
 
-def tags(tagged_object):
+def tags(tagged_object, tag_key='Tags'):
     return {tag['Key']: tag['Value']
-            for tag in tagged_object.get('Tags', {})}
+            for tag in tagged_object.get(tag_key, {})}
 
 
 def instance_private_ip(instance):
@@ -337,6 +343,7 @@ getter = dict(
     sg=get_all_security_groups,
     ec2=get_all_ec2_instances,
     ebs=get_all_volumes,
+    rds=get_all_rds_instances,
     roles=get_all_roles
 )
 
