@@ -296,6 +296,14 @@ def tags(tagged_object, tag_key='Tags'):
             for tag in tagged_object.get(tag_key, {})}
 
 
+def to_boto3_tags(tagdict):
+    """
+    Converts tag dict to list format that can feed to boto3 functions
+    """
+    return [{'Key': k, 'Value': v} for k, v in tagdict.items()
+            if 'aws:' not in k]
+
+
 def instance_private_ip(instance):
     return instance.get('PrivateIpAddress')
 
