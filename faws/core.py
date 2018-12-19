@@ -7,19 +7,6 @@ import boto3
 
 RESOURCES = ('ec2', 'elb', 'sg', 'roles', 'elasticache', 'asg', 'rds')
 
-ec2 = boto3.client('ec2')
-elbc = boto3.client('elb')
-iam = boto3.client('iam')
-ec = boto3.client('elasticache')
-asg = boto3.client('autoscaling')
-
-all_auto_scaling_groups = []
-all_ec_clusters = []
-all_load_balancers = []
-all_security_groups = []
-all_ec2_instances = []
-all_roles = []
-
 
 def request_all(client, funcname, topkey, wait_for=0, **kwargs):
     '''
@@ -42,6 +29,7 @@ def is_running(instance):
 
 
 def get_all_ec2_instances(filter_predicate=is_running):
+    ec2 = boto3.client('ec2')
     all_instances = []
     for reservation in ec2.describe_instances()['Reservations']:
         for instance in reservation['Instances']:
@@ -51,22 +39,27 @@ def get_all_ec2_instances(filter_predicate=is_running):
 
 
 def get_all_security_groups():
+    ec2 = boto3.client('ec2')
     return ec2.describe_security_groups()['SecurityGroups']
 
 
 def get_all_volumes():
+    ec2 = boto3.client('ec2')
     return ec2.describe_volumes()['Volumes']
 
 
 def get_all_load_balancers():
+    elbc = boto3.client('elb')
     return request_all(elbc, 'describe_load_balancers', 'LoadBalancerDescriptions', PageSize=400)
 
 
 def get_all_auto_scaling_groups():
+    asg = boto3.client('autoscaling')
     return request_all(asg, 'describe_auto_scaling_groups', 'AutoScalingGroups', MaxRecords=100)
 
 
 def get_all_cache_clusters():
+    ec = boto3.client('elasticache')
     return request_all(ec, 'describe_cache_clusters', 'CacheClusters')
 
 
@@ -76,24 +69,8 @@ def get_all_rds_instances():
 
 
 def get_all_roles():
-    # TODO paginate
-    roles = iam.list_roles(MaxItems=1000)
-    assert len(roles['Roles']) < 1000, 'THere are more than 1000 roles, do paginate, lazy!'
-    return roles['Roles']
-
-
-def get_instances():
-    '''
-    Get all instances, save to global var to not query AWS anymore
-    '''
-    pass
-
-
-def get_instance(instance_id):
-    '''
-    Get from local instead of call AWS
-    '''
-    pass
+    iam = boto3.client('iam')
+    return request_all(iam, 'list_roles', 'Roles')
 
 
 def instance_ids_to_ips(instance_ids):
@@ -133,6 +110,7 @@ def guess_service_name(lb_name):
 def extract_elb_name_and_sgs_from_elb(lb):
     if isinstance(lb, str):
         # got pretend sg name, and get inbound of the SG
+        all_security_groups = get_all_security_groups()
         sgs = [sg for sg in all_security_groups if sg['GroupName'].lower() == lb]
         inbound_sgs = []
         for sg in sgs:
@@ -147,6 +125,7 @@ def extract_elb_name_and_sgs_from_elb(lb):
 
 def sgid_to_inbounds(sgid):
     # inbound rules -> security group ids -> security group name
+    all_security_groups = get_all_security_groups()
     security_group = [sg for sg in all_security_groups if sg['GroupId'] == sgid]
     assert len(security_group) == 1, 'Should only 1 SG has given ID {}'.format(sgid)
 
@@ -178,6 +157,7 @@ def sgid_to_inbounds(sgid):
 
 
 def find_security_groups_contain(service_name):
+    all_security_groups = get_all_security_groups()
     service_name = service_name.lower()
     return [sg for sg in all_security_groups if service_name in sg['GroupName'].lower()]
 
@@ -244,8 +224,11 @@ def get_services_access_elb(elb_obj):
     return svcs
 
 
-def get_elb_object(elb_name):
-    return [elb_obj for elb_obj in all_load_balancers if elb_obj['LoadBalancerName']]
+def get_elb_object(elb_name, lbs=None):
+    if lbs is None:
+        lbs = get_all_load_balancers()
+
+    return [elb_obj for elb_obj in lbs if elb_obj['LoadBalancerName']]
 
 
 def get_elb_info(elb_name):
@@ -343,9 +326,8 @@ def first_key_prefix(item, key='RoleName'):
 
 
 def get_asg_of_service(service_name):
-
     service_asgs = filter_by_service_name(
-        all_auto_scaling_groups,
+        get_all_auto_scaling_groups(),
         lambda asg: 'prd-' in asg['AutoScalingGroupName'] and service_name == guess_service_name(asg['AutoScalingGroupName'])
     )
     assert len(service_asgs) == 1, "unhandled case {}".format(names(service_asgs))
@@ -377,12 +359,12 @@ getter = dict(
 
 
 def main():
-    # all_auto_scaling_groups = get_all_auto_scaling_groups()
-    # all_load_balancers = get_all_load_balancers()
-    # all_security_groups = get_all_security_groups()
-    # all_ec2_instances = get_all_ec2_instances()
-    # all_roles = get_all_roles()
+    all_auto_scaling_groups = get_all_auto_scaling_groups()
+    all_ec2_instances = get_all_ec2_instances()
     all_ec_clusters = get_all_cache_clusters()
+    all_load_balancers = get_all_load_balancers()
+    all_security_groups = get_all_security_groups()
+    all_roles = get_all_roles()
 
     rep_groups = set()
     for i in all_ec_clusters:
