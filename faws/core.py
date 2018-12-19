@@ -2,6 +2,7 @@
 import itertools
 import time
 
+import botocore
 import boto3
 
 RESOURCES = ('ec2', 'elb', 'sg', 'roles', 'elasticache', 'asg', 'rds')
@@ -302,6 +303,23 @@ def to_boto3_tags(tagdict):
     """
     return [{'Key': k, 'Value': v} for k, v in tagdict.items()
             if 'aws:' not in k]
+
+
+def list_resource_tags(arn, client=rds, backoff=30):
+    while True:
+        try:
+            resp = client.list_tags_for_resource(
+                ResourceName=arn
+            )
+            break
+        except botocore.exceptions.ClientError as e:
+            if 'RequestLimitExceeded' in str(e) or 'Throttling' in str(e):
+                print("Sleep for %d seconds, throttled, error: %s" % (backoff, e))
+                time.sleep(backoff)
+            else:
+                raise
+
+    return tags(resp, 'TagList')
 
 
 def instance_private_ip(instance):
