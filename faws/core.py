@@ -12,7 +12,6 @@ elbc = boto3.client('elb')
 iam = boto3.client('iam')
 ec = boto3.client('elasticache')
 asg = boto3.client('autoscaling')
-rds = boto3.client('rds')
 
 all_auto_scaling_groups = []
 all_ec_clusters = []
@@ -20,7 +19,6 @@ all_load_balancers = []
 all_security_groups = []
 all_ec2_instances = []
 all_roles = []
-all_rds_instances = []
 
 
 def request_all(client, funcname, topkey, wait_for=0, **kwargs):
@@ -73,6 +71,7 @@ def get_all_cache_clusters():
 
 
 def get_all_rds_instances():
+    rds = boto3.client('rds')
     return request_all(rds, 'describe_db_instances', 'DBInstances')
 
 
@@ -305,7 +304,10 @@ def to_boto3_tags(tagdict):
             if 'aws:' not in k]
 
 
-def list_resource_tags(arn, client=rds, backoff=30):
+def list_resource_tags(arn, client=None, backoff=30):
+    if client is None:
+        client = boto3.client('rds')
+
     while True:
         try:
             resp = client.list_tags_for_resource(
