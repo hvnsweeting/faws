@@ -287,10 +287,11 @@ def to_boto3_tags(tagdict):
             if 'aws:' not in k]
 
 
-def list_resource_tags(arn, client=None, backoff=30):
+def list_resource_tags(arn, client=None, backoff=30, retry_limit=10):
     if client is None:
         client = boto3.client('rds')
 
+    retry_count = 0
     while True:
         try:
             resp = client.list_tags_for_resource(
@@ -301,6 +302,10 @@ def list_resource_tags(arn, client=None, backoff=30):
             if 'RequestLimitExceeded' in str(e) or 'Throttling' in str(e):
                 print("Sleep for %d seconds, throttled, error: %s" % (backoff, e))
                 time.sleep(backoff)
+                retry_count = retry_count + 1
+                if retry_count == retry_limit:
+                    print("Retried %d times, stop and reraise exception")
+                    raise
             else:
                 raise
 
