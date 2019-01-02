@@ -14,12 +14,18 @@ def request_all(client, funcname, topkey, wait_for=0, **kwargs):
     '''
     paginator = client.get_paginator(funcname)
     all_entities = []
+    if isinstance(topkey, str):
+        topkey = [topkey]
 
     page_iterator = paginator.paginate(**kwargs)
     for page in page_iterator:
         if wait_for > 0:
             time.sleep(wait_for)
-        all_entities.extend(page[topkey])
+
+        items = page
+        for k in topkey:
+            items = items[k]
+        all_entities.extend(items)
 
     return all_entities
 
@@ -28,24 +34,29 @@ def is_running(instance):
     return instance['State']['Name'] == 'running'
 
 
-def get_all_ec2_instances(filter_predicate=is_running):
-    ec2 = boto3.client('ec2')
+def get_all_ec2_instances(filter_predicate=is_running, client=None):
+    if client is None:
+        client = boto3.client('ec2')
+
+    reservations = request_all(client, 'describe_instances', 'Reservations')
     all_instances = []
-    for reservation in ec2.describe_instances()['Reservations']:
-        for instance in reservation['Instances']:
+    for rev in reservations:
+        for instance in rev['Instances']:
             if filter_predicate(instance):
                 all_instances.append(instance)
     return all_instances
 
 
-def get_all_security_groups():
-    ec2 = boto3.client('ec2')
-    return ec2.describe_security_groups()['SecurityGroups']
+def get_all_security_groups(client):
+    if client is None:
+        client = boto3.client('ec2')
+    return client.describe_security_groups()['SecurityGroups']
 
 
-def get_all_volumes():
-    ec2 = boto3.client('ec2')
-    return ec2.describe_volumes()['Volumes']
+def get_all_volumes(client=None):
+    if client is None:
+        client = boto3.client('ec2')
+    return client.describe_volumes()['Volumes']
 
 
 def get_all_load_balancers():
@@ -63,9 +74,10 @@ def get_all_cache_clusters():
     return request_all(ec, 'describe_cache_clusters', 'CacheClusters')
 
 
-def get_all_rds_instances():
-    rds = boto3.client('rds')
-    return request_all(rds, 'describe_db_instances', 'DBInstances')
+def get_all_rds_instances(client):
+    if client is None:
+        client = boto3.client('rds')
+    return request_all(client, 'describe_db_instances', 'DBInstances')
 
 
 def get_all_roles():
@@ -275,8 +287,13 @@ def names(list_objs):
 
 
 def tags(tagged_object, tag_key='Tags'):
+    if tag_key is None:
+        iterable = tagged_object
+    else:
+        iterable = tagged_object.get(tag_key)
+
     return {tag['Key']: tag['Value']
-            for tag in tagged_object.get(tag_key, {})}
+            for tag in iterable}
 
 
 def to_boto3_tags(tagdict):
@@ -287,15 +304,18 @@ def to_boto3_tags(tagdict):
             if 'aws:' not in k]
 
 
-def list_resource_tags(arn, client=None, backoff=30, retry_limit=10):
+def list_resource_tags(arn, client=None, backoff=30, retry_limit=10, tagkey='TagList', **params):
     if client is None:
         client = boto3.client('rds')
 
     retry_count = 0
     while True:
         try:
+            if not params:
+                params = {'ResourceName': arn}
+
             resp = client.list_tags_for_resource(
-                ResourceName=arn
+                **params
             )
             break
         except botocore.exceptions.ClientError as e:
@@ -309,7 +329,7 @@ def list_resource_tags(arn, client=None, backoff=30, retry_limit=10):
             else:
                 raise
 
-    return tags(resp, 'TagList')
+    return tags(resp, tagkey)
 
 
 def instance_private_ip(instance):
