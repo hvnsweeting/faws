@@ -290,7 +290,7 @@ def tags(tagged_object, tag_key='Tags'):
     if tag_key is None:
         iterable = tagged_object
     else:
-        iterable = tagged_object.get(tag_key)
+        iterable = tagged_object.get(tag_key, [])
 
     return {tag['Key']: tag['Value']
             for tag in iterable}
