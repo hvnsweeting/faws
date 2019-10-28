@@ -30,7 +30,9 @@ Fast, functional AWS lib bases on boto3
 Features
 --------
 
-* TODO
+* list 'ec2', 'elb', 'sg', 'roles', 'elasticache', 'asg', 'rds' resources
+* get resources object
+* handle pagination
 
 Credits
 -------
